@@ -28,6 +28,11 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 {
     CGPoint _scrollViewOffsetBeforeDragging;
     CGFloat _keyboardHeightBeforeDragging;
+    CGFloat _bottomPanelHeight;
+    NSInteger _bottomPanelShowAnimationCurve;
+    NSTimeInterval _bottomPanelShowAnimationDuration;
+    NSInteger _bottomPanelHideAnimationCurve;
+    NSTimeInterval _bottomPanelHideAnimationDuration;
 }
 
 // The shared scrollView pointer, either a tableView or collectionView
@@ -42,6 +47,8 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 @property (nonatomic, strong) NSLayoutConstraint *typingIndicatorViewHC;
 @property (nonatomic, strong) NSLayoutConstraint *autoCompletionViewHC;
 @property (nonatomic, strong) NSLayoutConstraint *keyboardHC;
+@property (nonatomic, strong) NSLayoutConstraint *bottomPanelHeightConstraint;
+@property (nonatomic, strong) NSLayoutConstraint *bottomPanelTopConstraint;
 
 // YES if the user is moving the keyboard with a gesture
 @property (nonatomic, assign, getter = isMovingKeyboard) BOOL movingKeyboard;
@@ -56,9 +63,18 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 @property (nonatomic, strong) Class textViewClass;
 @property (nonatomic, strong) Class typingIndicatorViewClass;
 
+@property (nonatomic) UIView *bottomPanelView;
+@property (nonatomic, getter = isBottomPanelPresented) BOOL bottomPanelPresented;
+@property (nonatomic) CGFloat bottomPanelHeight;
+@property (nonatomic) NSInteger bottomPanelShowAnimationCurve;
+@property (nonatomic) NSTimeInterval bottomPanelShowAnimationDuration;
+@property (nonatomic) NSInteger bottomPanelHideAnimationCurve;
+@property (nonatomic) NSTimeInterval bottomPanelHideAnimationDuration;
+
 @end
 
 @implementation SLKTextViewController
+
 @synthesize tableView = _tableView;
 @synthesize collectionView = _collectionView;
 @synthesize scrollView = _scrollView;
@@ -158,6 +174,12 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     
     self.automaticallyAdjustsScrollViewInsets = YES;
     self.extendedLayoutIncludesOpaqueBars = YES;
+
+    _bottomPanelHeight = 216;
+    _bottomPanelShowAnimationCurve = 7;
+    _bottomPanelShowAnimationDuration = 0.25;
+    _bottomPanelHideAnimationCurve = 7;
+    _bottomPanelHideAnimationDuration = 0.25;
 }
 
 
@@ -171,12 +193,16 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 - (void)viewDidLoad
 {
     [super viewDidLoad];
-    
+
     [self.view addSubview:self.scrollViewProxy];
     [self.view addSubview:self.autoCompletionView];
     [self.view addSubview:self.typingIndicatorProxyView];
     [self.view addSubview:self.textInputbar];
-    
+
+    _bottomPanelView = [UIView new];
+    _bottomPanelView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_bottomPanelView];
+
     [self slk_setupViewConstraints];
     
     [self slk_registerKeyCommands];
@@ -309,7 +335,6 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
         _textInputbar = [[SLKTextInputbar alloc] initWithTextViewClass:self.textViewClass];
         _textInputbar.translatesAutoresizingMaskIntoConstraints = NO;
         
-        [_textInputbar.leftButton addTarget:self action:@selector(didPressLeftButton:) forControlEvents:UIControlEventTouchUpInside];
         [_textInputbar.rightButton addTarget:self action:@selector(didPressRightButton:) forControlEvents:UIControlEventTouchUpInside];
         [_textInputbar.editorLeftButton addTarget:self action:@selector(didCancelTextEditing:) forControlEvents:UIControlEventTouchUpInside];
         [_textInputbar.editorRightButton addTarget:self action:@selector(didCommitTextEditing:) forControlEvents:UIControlEventTouchUpInside];
@@ -361,9 +386,9 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     return _textInputbar.textView;
 }
 
-- (UIButton *)leftButton
+- (UIView *)leftView
 {
-    return _textInputbar.leftButton;
+    return _textInputbar.leftView;
 }
 
 - (UIButton *)rightButton
@@ -400,7 +425,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     CGFloat viewHeight = CGRectGetHeight(self.view.bounds);
     CGFloat keyboardMinY = CGRectGetMinY(keyboardRect);
     
-    CGFloat keyboardHeight = MAX(0.0, viewHeight - keyboardMinY);
+    CGFloat keyboardHeight = MAX(0.0f, viewHeight - keyboardMinY);
     CGFloat bottomMargin = [self slk_appropriateBottomMargin];
     
     // When the keyboard height is zero, we can assume there is no keyboard visible
@@ -415,18 +440,19 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (CGFloat)slk_appropriateBottomMargin
 {
+    CGFloat bottomPanelHeight = _bottomPanelPresented ? _bottomPanelHeight : 0.0f;
+
     // A bottom margin is required only if the view is extended out of it bounds
     if ((self.edgesForExtendedLayout & UIRectEdgeBottom) > 0) {
-        
         UITabBar *tabBar = self.tabBarController.tabBar;
         
         // Considers the bottom tab bar, unless it will be hidden
         if (tabBar && !tabBar.hidden && !self.hidesBottomBarWhenPushed) {
-            return CGRectGetHeight(tabBar.frame);
+            return MAX(bottomPanelHeight, CGRectGetHeight(tabBar.frame));
         }
     }
     
-    return 0.0;
+    return bottomPanelHeight;
 }
 
 - (CGFloat)slk_appropriateScrollViewHeight
@@ -437,9 +463,8 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     scrollViewHeight -= self.textInputbarHC.constant;
     scrollViewHeight -= self.autoCompletionViewHC.constant;
     scrollViewHeight -= self.typingIndicatorViewHC.constant;
-    
-    if (scrollViewHeight < 0) return 0;
-    else return scrollViewHeight;
+
+    return MAX(scrollViewHeight, 0);
 }
 
 - (CGFloat)slk_topBarsHeight
@@ -722,11 +747,6 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     }
     
     return NO;
-}
-
-- (void)didPressLeftButton:(id)sender
-{
-    // No implementation here. Meant to be overriden in subclass.
 }
 
 - (void)didPressRightButton:(id)sender
@@ -1100,6 +1120,9 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (void)slk_didTapScrollView:(UIGestureRecognizer *)gesture
 {
+    if (_bottomPanelPresented) {
+        [self dismissBottomPanel:YES];
+    }
     if (!self.isPresentedInPopover && ![self ignoreTextInputbarAdjustment]) {
         [self dismissKeyboard:YES];
     }
@@ -1141,8 +1164,8 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     beginFrame.size.height = keyboardHeight;
     endFrame.size.height = keyboardHeight;
     
-    [userInfo setObject:[NSValue valueWithCGRect:beginFrame] forKey:UIKeyboardFrameBeginUserInfoKey];
-    [userInfo setObject:[NSValue valueWithCGRect:endFrame] forKey:UIKeyboardFrameEndUserInfoKey];
+    userInfo[UIKeyboardFrameBeginUserInfoKey] = [NSValue valueWithCGRect:beginFrame];
+    userInfo[UIKeyboardFrameEndUserInfoKey] = [NSValue valueWithCGRect:endFrame];
     
     NSString *name = [self slk_appropriateKeyboardNotificationName:notification];
     [[NSNotificationCenter defaultCenter] postNotificationName:name object:self.textView userInfo:userInfo];
@@ -1282,6 +1305,68 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 }
 
 
+#pragma mark - Bottom Panel
+
+- (void)presentBottomPanel:(BOOL)animated
+{
+    _bottomPanelPresented = YES;
+    [self didChangeBottomPanelPresented:_bottomPanelPresented];
+
+    if (self.keyboardStatus == SLKKeyboardStatusDidHide || self.keyboardStatus == SLKKeyboardStatusWillHide) {
+        self.bottomPanelTopConstraint.constant = 0;
+        [self.view layoutIfNeeded];
+
+        CGFloat currentHeight = _bottomPanelHeight;
+        self.bottomPanelHeightConstraint.constant = currentHeight;
+        self.keyboardHC.constant = currentHeight;
+        self.scrollViewHC.constant = [self slk_appropriateScrollViewHeight];
+
+        void (^animations)() = ^{
+            if (self.shouldScrollToBottomAfterKeyboardShows) {
+                if (self.isInverted) {
+                    [self.scrollViewProxy slk_scrollToTopAnimated:YES];
+                }
+                else {
+                    [self.scrollViewProxy slk_scrollToBottomAnimated:YES];
+                }
+            }
+        };
+
+        if (animated) {
+            NSInteger options = (_bottomPanelShowAnimationCurve << 16) | UIViewAnimationOptionLayoutSubviews | UIViewAnimationOptionBeginFromCurrentState;
+            [self.view slk_animateLayoutIfNeededWithDuration:_bottomPanelShowAnimationDuration bounce:NO options:(UIViewAnimationOptions)options animations:animations completion:NULL];
+        }
+        else {
+            animations();
+        }
+    }
+    else {
+        [self dismissKeyboard:animated];
+    }
+}
+
+- (void)dismissBottomPanel:(BOOL)animated
+{
+    _bottomPanelPresented = NO;
+    [self didChangeBottomPanelPresented:_bottomPanelPresented];
+
+    if (self.keyboardStatus == SLKKeyboardStatusDidHide || self.keyboardStatus == SLKKeyboardStatusWillHide) {
+        CGFloat previousHeight = self.keyboardHC.constant;
+        CGFloat currentHeight = [self slk_appropriateBottomMargin];
+        self.keyboardHC.constant = currentHeight;
+        self.scrollViewHC.constant = [self slk_appropriateScrollViewHeight];
+
+        if (animated && fabs(previousHeight - currentHeight) > 0.1) {
+            NSInteger options = (_bottomPanelHideAnimationCurve << 16) | UIViewAnimationOptionLayoutSubviews | UIViewAnimationOptionBeginFromCurrentState;
+            [self.view slk_animateLayoutIfNeededWithDuration:_bottomPanelHideAnimationDuration bounce:NO options:(UIViewAnimationOptions)options animations:NULL completion:NULL];
+        }
+    }
+}
+
+- (void)didChangeBottomPanelPresented:(BOOL)presented
+{
+}
+
 #pragma mark - Keyboard Events
 
 - (void)didPressReturnKey:(UIKeyCommand *)keyCommand
@@ -1322,7 +1407,21 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 - (void)slk_willShowOrHideKeyboard:(NSNotification *)notification
 {
     SLKKeyboardStatus status = [self slk_keyboardStatusForNotification:notification];
-    
+
+    NSInteger curve = [notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue];
+    NSTimeInterval duration = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+
+    CGFloat keyboardHeight = [self slk_appropriateKeyboardHeightFromNotification:notification];
+
+    if (status == SLKKeyboardStatusWillShow) {
+        _bottomPanelHeight = keyboardHeight;
+        _bottomPanelShowAnimationCurve = curve;
+        _bottomPanelShowAnimationDuration = duration;
+    } else if (status == SLKKeyboardStatusWillHide) {
+        _bottomPanelHideAnimationCurve = curve;
+        _bottomPanelHideAnimationDuration = duration;
+    }
+
     // Skips if the view isn't visible.
     if (!self.isViewVisible) {
         return;
@@ -1368,20 +1467,20 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
         [self slk_hideAutoCompletionViewIfNeeded];
     }
     
-    // Stores the previous keyboard height
-    CGFloat previousKeyboardHeight = self.keyboardHC.constant;
-
     // Updates the height constraints' constants
-    self.keyboardHC.constant = [self slk_appropriateKeyboardHeightFromNotification:notification];
+
+    if (status == SLKKeyboardStatusWillShow) {
+        self.bottomPanelTopConstraint.constant = keyboardHeight;
+    } else if (status == SLKKeyboardStatusWillHide) {
+        if (_bottomPanelPresented) {
+            self.bottomPanelTopConstraint.constant = 0;
+        }
+    }
+
+    self.bottomPanelHeightConstraint.constant = keyboardHeight;
+    self.keyboardHC.constant = keyboardHeight;
     self.scrollViewHC.constant = [self slk_appropriateScrollViewHeight];
-    
-    
-    NSInteger curve = [notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue];
-    NSTimeInterval duration = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
-    
-    CGRect beginFrame = [notification.userInfo[UIKeyboardFrameBeginUserInfoKey] CGRectValue];
-    CGRect endFrame = [notification.userInfo[UIKeyboardFrameEndUserInfoKey] CGRectValue];
-    
+
     void (^animations)() = ^void() {
         // Scrolls to bottom only if the keyboard is about to show.
         if (self.shouldScrollToBottomAfterKeyboardShows && self.keyboardStatus == SLKKeyboardStatusWillShow) {
@@ -1393,22 +1492,20 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
             }
         }
     };
-    
-    // Begin and end frames are the same when the keyboard is shown during navigation controller's push animation.
-    // The animation happens in window coordinates (slides from right to left) but doesn't in the view controller's view coordinates.
-    // Second condition: check if the height of the keyboard changed.
-    if (!CGRectEqualToRect(beginFrame, endFrame) || fabs(previousKeyboardHeight - self.keyboardHC.constant) > 0.0)
-    {
-        // Only for this animation, we set bo to bounce since we want to give the impression that the text input is glued to the keyboard.
-        [self.view slk_animateLayoutIfNeededWithDuration:duration
-                                                  bounce:NO
-                                                 options:(curve<<16)|UIViewAnimationOptionLayoutSubviews|UIViewAnimationOptionBeginFromCurrentState
-                                              animations:animations
-                                              completion:NULL];
-    }
-    else {
-        animations();
-    }
+
+    void (^completion)(BOOL)=^(BOOL finished) {
+        if (status == SLKKeyboardStatusWillShow) {
+            self.bottomPanelTopConstraint.constant = keyboardHeight;
+        } else if (status == SLKKeyboardStatusWillHide) {
+            if (_bottomPanelPresented) {
+                self.bottomPanelTopConstraint.constant = 0;
+            }
+        }
+    };
+
+    NSInteger options = (curve << 16) | UIViewAnimationOptionLayoutSubviews | UIViewAnimationOptionBeginFromCurrentState;
+    [self.view slk_animateLayoutIfNeededWithDuration:duration bounce:NO options:(UIViewAnimationOptions)options
+        animations:animations completion:completion];
 }
 
 - (void)slk_didShowOrHideKeyboard:(NSNotification *)notification
@@ -2042,7 +2139,10 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (void)textViewDidBeginEditing:(SLKTextView *)textView
 {
-    // No implementation here. Meant to be overriden in subclass.
+    if (_bottomPanelPresented) {
+        _bottomPanelPresented = NO;
+        [self didChangeBottomPanelPresented:_bottomPanelPresented];
+    }
 }
 
 - (void)textViewDidEndEditing:(SLKTextView *)textView
@@ -2151,7 +2251,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gesture
 {
     if ([gesture isEqual:self.singleTapGesture]) {
-        return [self.textView isFirstResponder] && ![self ignoreTextInputbarAdjustment];
+        return ([self.textView isFirstResponder] && ![self ignoreTextInputbarAdjustment]) || _bottomPanelPresented;
     }
     else if ([gesture isEqual:self.verticalPanGesture]) {
         return self.keyboardPanningEnabled && ![self ignoreTextInputbarAdjustment];
@@ -2182,11 +2282,13 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (void)slk_setupViewConstraints
 {
-    NSDictionary *views = @{@"scrollView": self.scrollViewProxy,
-                            @"autoCompletionView": self.autoCompletionView,
-                            @"typingIndicatorView": self.typingIndicatorProxyView,
-                            @"textInputbar": self.textInputbar,
-                            };
+    NSDictionary *views = @{
+        @"scrollView": self.scrollViewProxy,
+        @"autoCompletionView": self.autoCompletionView,
+        @"typingIndicatorView": self.typingIndicatorProxyView,
+        @"textInputbar": self.textInputbar,
+        @"bottomPanelView": self.bottomPanelView,
+    };
     
     [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|[scrollView(0@750)][typingIndicatorView(0)]-0@999-[textInputbar(0)]|" options:0 metrics:nil views:views]];
     [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-(>=0)-[autoCompletionView(0@750)][typingIndicatorView]" options:0 metrics:nil views:views]];
@@ -2194,13 +2296,18 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[autoCompletionView]|" options:0 metrics:nil views:views]];
     [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[typingIndicatorView]|" options:0 metrics:nil views:views]];
     [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[textInputbar]|" options:0 metrics:nil views:views]];
-    
+
+    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:[textInputbar]-0-[bottomPanelView(216)]" options:0 metrics:nil views:views]];
+    [self.view addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[bottomPanelView]|" options:0 metrics:nil views:views]];
+
     self.scrollViewHC = [self.view slk_constraintForAttribute:NSLayoutAttributeHeight firstItem:self.scrollViewProxy secondItem:nil];
     self.autoCompletionViewHC = [self.view slk_constraintForAttribute:NSLayoutAttributeHeight firstItem:self.autoCompletionView secondItem:nil];
     self.typingIndicatorViewHC = [self.view slk_constraintForAttribute:NSLayoutAttributeHeight firstItem:self.typingIndicatorProxyView secondItem:nil];
     self.textInputbarHC = [self.view slk_constraintForAttribute:NSLayoutAttributeHeight firstItem:self.textInputbar secondItem:nil];
     self.keyboardHC = [self.view slk_constraintForAttribute:NSLayoutAttributeBottom firstItem:self.view secondItem:self.textInputbar];
-    
+    self.bottomPanelHeightConstraint = [self.view slk_constraintForAttribute:NSLayoutAttributeHeight firstItem:self.bottomPanelView secondItem:nil];
+    self.bottomPanelTopConstraint = [self.view slk_constraintForAttribute:NSLayoutAttributeTop firstItem:self.bottomPanelView secondItem:self.textInputbar];
+
     [self slk_updateViewConstraints];
 }
 
@@ -2372,37 +2479,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 {
     [self slk_unregisterNotifications];
 
-    _tableView.delegate = nil;
-    _tableView.dataSource = nil;
-    _tableView = nil;
-    
-    _collectionView.delegate = nil;
-    _collectionView.dataSource = nil;
-    _collectionView = nil;
-    
-    _scrollView = nil;
-    
-    _autoCompletionView.delegate = nil;
-    _autoCompletionView.dataSource = nil;
-    _autoCompletionView = nil;
-    
-    _textInputbar = nil;
-    _textViewClass = nil;
-    
     [_typingIndicatorProxyView removeObserver:self forKeyPath:@"visible"];
-    _typingIndicatorProxyView = nil;
-    _typingIndicatorViewClass = nil;
-    
-    _registeredPrefixes = nil;
-    _singleTapGesture.delegate = nil;
-    _singleTapGesture = nil;
-    _verticalPanGesture.delegate = nil;
-    _verticalPanGesture = nil;
-    _scrollViewHC = nil;
-    _textInputbarHC = nil;
-    _typingIndicatorViewHC = nil;
-    _autoCompletionViewHC = nil;
-    _keyboardHC = nil;
 }
 
 @end

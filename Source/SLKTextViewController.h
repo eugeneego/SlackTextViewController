@@ -119,8 +119,19 @@ NS_CLASS_AVAILABLE_IOS(7_0) @interface SLKTextViewController : UIViewController 
 
 /** Convenience accessors (accessed through the text input bar) */
 @property (nonatomic, readonly) SLKTextView *textView;
-@property (nonatomic, readonly) UIButton *leftButton;
+@property (nonatomic, readonly) UIView *leftView;
 @property (nonatomic, readonly) UIButton *rightButton;
+
+
+/** Bottom Panel */
+
+@property (nonatomic, readonly, getter = isBottomPanelPresented) BOOL bottomPanelPresented;
+@property (nonatomic, readonly) UIView *bottomPanelView;
+@property (nonatomic, readonly) CGFloat bottomPanelHeight;
+@property (nonatomic, readonly) NSInteger bottomPanelShowAnimationCurve;
+@property (nonatomic, readonly) NSTimeInterval bottomPanelShowAnimationDuration;
+@property (nonatomic, readonly) NSInteger bottomPanelHideAnimationCurve;
+@property (nonatomic, readonly) NSTimeInterval bottomPanelHideAnimationDuration;
 
 
 #pragma mark - Initialization
@@ -234,6 +245,14 @@ NS_CLASS_AVAILABLE_IOS(7_0) @interface SLKTextViewController : UIViewController 
 - (void)didChangeKeyboardStatus:(SLKKeyboardStatus)status;
 
 
+#pragma mark - Bottom Panel
+
+- (void)presentBottomPanel:(BOOL)animated;
+
+- (void)dismissBottomPanel:(BOOL)animated;
+
+- (void)didChangeBottomPanelPresented:(BOOL)presented;
+
 #pragma mark - Interaction Notifications
 ///------------------------------------------------
 /// @name Interaction Notifications
@@ -263,15 +282,6 @@ NS_CLASS_AVAILABLE_IOS(7_0) @interface SLKTextViewController : UIViewController 
  You MUST call super at some point in your implementation.
  */
 - (void)textSelectionDidChange NS_REQUIRES_SUPER;
-
-/**
- Notifies the view controller when the left button's action has been triggered, manually.
- You can override this method to perform additional tasks associated with the left button.
- You don't need call super since this method doesn't do anything.
- 
- @param sender The object calling this method.
- */
-- (void)didPressLeftButton:(id _Nullable)sender;
 
 /**
  Notifies the view controller when the right button's action has been triggered, manually or by using the keyboard return key.
