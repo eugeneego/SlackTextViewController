@@ -121,7 +121,6 @@ static NSString *const SLKTextViewGenericFormattingSelectorPrefix = @"slk_format
     self.placeholderLabel.hidden = [self slk_shouldHidePlaceholder];
     
     if (!self.placeholderLabel.hidden) {
-        
         [UIView performWithoutAnimation:^{
             self.placeholderLabel.frame = [self slk_placeholderRectThatFits:self.bounds];
             [self sendSubviewToBack:self.placeholderLabel];
@@ -1093,23 +1092,25 @@ typedef void (^SLKKeyCommandHandler)(UIKeyCommand *keyCommand);
 - (void)slk_registerNotifications
 {
     [self slk_unregisterNotifications];
-    
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didBeginEditing:) name:UITextViewTextDidBeginEditingNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didChangeText:) name:UITextViewTextDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didEndEditing:) name:UITextViewTextDidEndEditingNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didChangeTextInputMode:) name:UITextInputCurrentInputModeDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didChangeContentSizeCategory:) name:UIContentSizeCategoryDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_willShowMenuController:) name:UIMenuControllerWillShowMenuNotification object:nil];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(slk_didHideMenuController:) name:UIMenuControllerDidHideMenuNotification object:nil];
+
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center addObserver:self selector:@selector(slk_didBeginEditing:) name:UITextViewTextDidBeginEditingNotification object:nil];
+    [center addObserver:self selector:@selector(slk_didChangeText:) name:UITextViewTextDidChangeNotification object:nil];
+    [center addObserver:self selector:@selector(slk_didEndEditing:) name:UITextViewTextDidEndEditingNotification object:nil];
+    [center addObserver:self selector:@selector(slk_didChangeTextInputMode:) name:UITextInputCurrentInputModeDidChangeNotification object:nil];
+    [center addObserver:self selector:@selector(slk_didChangeContentSizeCategory:) name:UIContentSizeCategoryDidChangeNotification object:nil];
+    [center addObserver:self selector:@selector(slk_willShowMenuController:) name:UIMenuControllerWillShowMenuNotification object:nil];
+    [center addObserver:self selector:@selector(slk_didHideMenuController:) name:UIMenuControllerDidHideMenuNotification object:nil];
 }
 
 - (void)slk_unregisterNotifications
 {
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextViewTextDidBeginEditingNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextViewTextDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextViewTextDidEndEditingNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UITextInputCurrentInputModeDidChangeNotification object:nil];
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:UIContentSizeCategoryDidChangeNotification object:nil];
+    NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+    [center removeObserver:self name:UITextViewTextDidBeginEditingNotification object:nil];
+    [center removeObserver:self name:UITextViewTextDidChangeNotification object:nil];
+    [center removeObserver:self name:UITextViewTextDidEndEditingNotification object:nil];
+    [center removeObserver:self name:UITextInputCurrentInputModeDidChangeNotification object:nil];
+    [center removeObserver:self name:UIContentSizeCategoryDidChangeNotification object:nil];
 }
 
 
@@ -1120,13 +1121,6 @@ typedef void (^SLKKeyCommandHandler)(UIKeyCommand *keyCommand);
     [self slk_unregisterNotifications];
     
     [self removeObserver:self forKeyPath:NSStringFromSelector(@selector(contentSize))];
-    
-    _placeholderLabel = nil;
-    
-    _registeredFormattingTitles = nil;
-    _registeredFormattingSymbols = nil;
-    _registeredKeyCommands = nil;
-    _registeredKeyCallbacks = nil;
 }
 
 @end

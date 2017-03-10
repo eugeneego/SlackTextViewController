@@ -128,9 +128,9 @@ NS_CLASS_AVAILABLE_IOS(7_0) @interface SLKTextViewController : UIViewController 
 @property (nonatomic, readonly, getter = isBottomPanelPresented) BOOL bottomPanelPresented;
 @property (nonatomic, readonly) UIView *bottomPanelView;
 @property (nonatomic, readonly) CGFloat bottomPanelHeight;
-@property (nonatomic, readonly) NSInteger bottomPanelShowAnimationCurve;
+@property (nonatomic, readonly) NSUInteger bottomPanelShowAnimationCurve;
 @property (nonatomic, readonly) NSTimeInterval bottomPanelShowAnimationDuration;
-@property (nonatomic, readonly) NSInteger bottomPanelHideAnimationCurve;
+@property (nonatomic, readonly) NSUInteger bottomPanelHideAnimationCurve;
 @property (nonatomic, readonly) NSTimeInterval bottomPanelHideAnimationDuration;
 
 
@@ -257,6 +257,12 @@ NS_CLASS_AVAILABLE_IOS(7_0) @interface SLKTextViewController : UIViewController 
 ///------------------------------------------------
 /// @name Interaction Notifications
 ///------------------------------------------------
+
+/**
+ Notifies the view controller that the scroll view was tapped.
+ Default behavior is hiding of the keyboard and the bottom panel.
+ */
+- (void)scrollViewTap;
 
 /**
  Notifies the view controller that the text will update.

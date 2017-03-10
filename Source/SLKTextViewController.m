@@ -23,16 +23,14 @@ NSString * const SLKKeyboardWillHideNotification =      @"SLKKeyboardWillHideNot
 NSString * const SLKKeyboardDidHideNotification =       @"SLKKeyboardDidHideNotification";
 
 CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
+CGFloat const SLKBottomPanelDefaultHeight = 271.0;
+NSUInteger const SLKBottomPanelDefaultAnimationCurve = 7;
+NSTimeInterval const SLKBottomPanelDefaultAnimationDuration = 0.25;
 
 @interface SLKTextViewController ()
 {
     CGPoint _scrollViewOffsetBeforeDragging;
     CGFloat _keyboardHeightBeforeDragging;
-    CGFloat _bottomPanelHeight;
-    NSInteger _bottomPanelShowAnimationCurve;
-    NSTimeInterval _bottomPanelShowAnimationDuration;
-    NSInteger _bottomPanelHideAnimationCurve;
-    NSTimeInterval _bottomPanelHideAnimationDuration;
 }
 
 // The shared scrollView pointer, either a tableView or collectionView
@@ -66,9 +64,9 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 @property (nonatomic) UIView *bottomPanelView;
 @property (nonatomic, getter = isBottomPanelPresented) BOOL bottomPanelPresented;
 @property (nonatomic) CGFloat bottomPanelHeight;
-@property (nonatomic) NSInteger bottomPanelShowAnimationCurve;
+@property (nonatomic) NSUInteger bottomPanelShowAnimationCurve;
 @property (nonatomic) NSTimeInterval bottomPanelShowAnimationDuration;
-@property (nonatomic) NSInteger bottomPanelHideAnimationCurve;
+@property (nonatomic) NSUInteger bottomPanelHideAnimationCurve;
 @property (nonatomic) NSTimeInterval bottomPanelHideAnimationDuration;
 
 @end
@@ -175,11 +173,11 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     self.automaticallyAdjustsScrollViewInsets = YES;
     self.extendedLayoutIncludesOpaqueBars = YES;
 
-    _bottomPanelHeight = 216;
-    _bottomPanelShowAnimationCurve = 7;
-    _bottomPanelShowAnimationDuration = 0.25;
-    _bottomPanelHideAnimationCurve = 7;
-    _bottomPanelHideAnimationDuration = 0.25;
+    _bottomPanelHeight = SLKBottomPanelDefaultHeight;
+    _bottomPanelShowAnimationCurve = SLKBottomPanelDefaultAnimationCurve;
+    _bottomPanelShowAnimationDuration = SLKBottomPanelDefaultAnimationDuration;
+    _bottomPanelHideAnimationCurve = SLKBottomPanelDefaultAnimationCurve;
+    _bottomPanelHideAnimationDuration = SLKBottomPanelDefaultAnimationDuration;
 }
 
 
@@ -429,7 +427,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     CGFloat bottomMargin = [self slk_appropriateBottomMargin];
     
     // When the keyboard height is zero, we can assume there is no keyboard visible
-    // In that case, let's see if there are any other views outside of the view hiearchy
+    // In that case, let's see if there are any other views outside of the view hierarchy
     // requiring to adjust the text input bottom margin
     if (keyboardHeight < bottomMargin) {
         keyboardHeight = bottomMargin;
@@ -556,7 +554,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
         return;
     }
     
-    _singleTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(slk_didTapScrollView:)];
+    _singleTapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(scrollViewTap)];
     _singleTapGesture.delegate = self;
     [_singleTapGesture requireGestureRecognizerToFail:scrollView.panGestureRecognizer];
     
@@ -1118,7 +1116,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     }
 }
 
-- (void)slk_didTapScrollView:(UIGestureRecognizer *)gesture
+- (void)scrollViewTap
 {
     if (_bottomPanelPresented) {
         [self dismissBottomPanel:YES];
@@ -1142,7 +1140,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     }
 }
 
-- (void)slk_postKeyboarStatusNotification:(NSNotification *)notification
+- (void)slk_postKeyboardStatusNotification:(NSNotification *)notification
 {
     if ([self ignoreTextInputbarAdjustment] || self.isTransitioning) {
         return;
@@ -1309,6 +1307,10 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (void)presentBottomPanel:(BOOL)animated
 {
+    if (_bottomPanelPresented) {
+        return;
+    }
+
     _bottomPanelPresented = YES;
     [self didChangeBottomPanelPresented:_bottomPanelPresented];
 
@@ -1347,6 +1349,10 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
 - (void)dismissBottomPanel:(BOOL)animated
 {
+    if (!_bottomPanelPresented) {
+        return;
+    }
+
     _bottomPanelPresented = NO;
     [self didChangeBottomPanelPresented:_bottomPanelPresented];
 
@@ -1408,13 +1414,18 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 {
     SLKKeyboardStatus status = [self slk_keyboardStatusForNotification:notification];
 
-    NSInteger curve = [notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] integerValue];
+    NSUInteger curve = [notification.userInfo[UIKeyboardAnimationCurveUserInfoKey] unsignedIntegerValue];
     NSTimeInterval duration = [notification.userInfo[UIKeyboardAnimationDurationUserInfoKey] doubleValue];
+
+    BOOL oldBottomPanelPresented = _bottomPanelPresented;
+    if (status == SLKKeyboardStatusWillShow) {
+        _bottomPanelPresented = NO;
+    }
 
     CGFloat keyboardHeight = [self slk_appropriateKeyboardHeightFromNotification:notification];
 
     if (status == SLKKeyboardStatusWillShow) {
-        _bottomPanelHeight = keyboardHeight;
+        _bottomPanelHeight = keyboardHeight > 0.1 ? keyboardHeight : _bottomPanelHeight;
         _bottomPanelShowAnimationCurve = curve;
         _bottomPanelShowAnimationDuration = duration;
     } else if (status == SLKKeyboardStatusWillHide) {
@@ -1454,10 +1465,10 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     // Updates and notifies about the keyboard status update
     if ([self slk_updateKeyboardStatus:status]) {
         // Posts custom keyboard notification, if logical conditions apply
-        [self slk_postKeyboarStatusNotification:notification];
+        [self slk_postKeyboardStatusNotification:notification];
     }
-    
-    // Programatically stops scrolling before updating the view constraints (to avoid scrolling glitch).
+
+    // Programmatically stops scrolling before updating the view constraints (to avoid scrolling glitch).
     if (status == SLKKeyboardStatusWillShow) {
         [self.scrollViewProxy slk_stopScrolling];
     }
@@ -1471,6 +1482,11 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
 
     if (status == SLKKeyboardStatusWillShow) {
         self.bottomPanelTopConstraint.constant = keyboardHeight;
+
+        if (oldBottomPanelPresented) {
+            _bottomPanelPresented = oldBottomPanelPresented;
+            [self dismissBottomPanel:YES];
+        }
     } else if (status == SLKKeyboardStatusWillHide) {
         if (_bottomPanelPresented) {
             self.bottomPanelTopConstraint.constant = 0;
@@ -1540,7 +1556,7 @@ CGFloat const SLKAutoCompletionViewDefaultHeight = 140.0;
     // Updates and notifies about the keyboard status update
     if ([self slk_updateKeyboardStatus:status]) {
         // Posts custom keyboard notification, if logical conditions apply
-        [self slk_postKeyboarStatusNotification:notification];
+        [self slk_postKeyboardStatusNotification:notification];
     }
     
     // After showing keyboard, check if the current cursor position could diplay autocompletion
